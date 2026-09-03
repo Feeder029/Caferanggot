@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caferanggot</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./app/static/styles/main.css">
+</head>
+<body>
+    <div class="device" id="device" data-state="welcome">
+ 
+    <div class="brandmark">Caferanggot</div>
+    
+    <!-- WELCOME -->
+    <div class="screen screen-welcome">
+        <button class="trigger" id="btnWelcome" aria-label="Find coffee near you">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Cup -->
+            <path
+                d="M16 25H46V40C46 47 40 52 31 52H31C22 52 16 47 16 40V25Z"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linejoin="round"
+            />
+
+            <!-- Handle -->
+            <path
+                d="M46 29H50C55 29 57 32 57 36C57 40 55 43 50 43H46"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            />
+
+            <!-- Coffee -->
+            <path
+                d="M19 25H43"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+            />
+
+            <!-- Steam -->
+            <path
+                d="M25 19C22 16 27 13 24 10"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+            />
+            <path
+                d="M34 19C31 16 36 13 33 10"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+            />
+        </svg>
+        </button>
+        <p class="helper-text">Tap to search for coffee nearby</p>
+    </div>
+    
+    <!-- READY -->
+    <div class="screen screen-ready">
+        <button class="pill" id="btnReady">Start Searching</button>
+        <p class="helper-text">Uses your current location</p>
+        <button class="ghost-btn" id="btnCancelReady">Cancel</button>
+    </div>
+    
+    <!-- LISTENING (echolocation) -->
+    <div class="screen screen-listening">
+        <div class="sonar" aria-hidden="true">
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="core"></div>
+        </div>
+        <p class="status-text" role="status">
+        Listening<span class="dots"><span>.</span><span>.</span><span>.</span></span>
+        </p>
+        <p class="helper-text">This usually takes a few seconds</p>
+    </div>
+    
+    <!-- RESULTS -->
+    <div class="screen screen-results">
+    <div class="results-inner">
+    
+        <svg class="mini-map" viewBox="0 0 320 118" aria-hidden="true">
+        <line x1="0" y1="30" x2="320" y2="22" stroke="var(--line)" stroke-width="1"/>
+        <line x1="0" y1="78" x2="320" y2="86" stroke="var(--line)" stroke-width="1"/>
+        <line x1="60" y1="0" x2="48" y2="118" stroke="var(--line)" stroke-width="1"/>
+        <line x1="220" y1="0" x2="232" y2="118" stroke="var(--line)" stroke-width="1"/>
+        <circle class="pin-user" cx="160" cy="58" r="5" fill="var(--gold)"/>
+        <circle cx="118" cy="40" r="3" fill="var(--cream-dim)"/>
+        <circle cx="196" cy="70" r="3" fill="var(--cream-dim)"/>
+        <circle cx="230" cy="34" r="3" fill="var(--cream-dim)"/>
+        <circle cx="94" cy="88" r="3" fill="var(--cream-dim)"/>
+        </svg>
+    
+        <div class="results-head">
+        <h1>4 cafés listening back</h1>
+        <p>Closest first</p>
+        </div>
+    
+        <div class="cafe-list">
+        
+        </div>
+    
+        <div class="results-footer">
+        <button class="ghost-btn" id="btnReset">Search again</button>
+        </div>
+    </div>
+    </div>
+    
+    <!-- DETAIL SHEET -->
+    <div class="scrim" id="scrim"></div>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetName">
+        <div class="sheet-handle"></div>
+        <button class="sheet-close" id="sheetClose" aria-label="Close details">&times;</button>
+        <div class="sheet-top">
+        <div class="signal" id="sheetSignal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <h2 id="sheetName">Ember &amp; Oak</h2>
+        </div>
+        <p class="sheet-sub" id="sheetWalk">About 3 minutes on foot</p>
+        <span class="status-badge open" id="sheetStatus">Open now</span>
+        <p class="sheet-desc" id="sheetDesc"></p>
+        <div class="tag-row" id="sheetTags"></div>
+        <div class="sheet-footer">
+        <p class="sheet-address" id="sheetStreet"></p>
+        <button class="pill small">Get directions</button>
+        </div>
+    </div>
+    
+
+    <script src="./app/static/js/main.js"></script>
+</body>
+</html>
