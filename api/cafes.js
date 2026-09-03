@@ -1,7 +1,9 @@
 export default async function handler(request) {
     if (request.method !== "POST") {
         return new Response(
-            JSON.stringify({ error: "Method not allowed" }),
+            JSON.stringify({
+                error: "Method not allowed"
+            }),
             {
                 status: 405,
                 headers: {
@@ -16,15 +18,30 @@ export default async function handler(request) {
 
         const latitude = Number(body.latitude);
         const longitude = Number(body.longitude);
-        const radius = Number(body.radius) || 5000;
+
+        let radius = Number(body.radius);
+
+        if (!Number.isFinite(radius)) {
+            radius = 3000;
+        }
+
+        radius = Math.min(
+            Math.max(radius, 500),
+            5000
+        );
 
         if (
             !Number.isFinite(latitude) ||
             !Number.isFinite(longitude) ||
-            !Number.isFinite(radius)
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180
         ) {
             return new Response(
-                JSON.stringify({ error: "Invalid location data" }),
+                JSON.stringify({
+                    error: "Invalid location data"
+                }),
                 {
                     status: 400,
                     headers: {
@@ -34,30 +51,8 @@ export default async function handler(request) {
             );
         }
 
-        // const query = `
-        //     [out:json][timeout:15];
-
-        //     (
-        //         nwr["amenity"="cafe"]
-        //             (around:${radius},${latitude},${longitude});
-
-        //         nwr["shop"="coffee"]
-        //             (around:${radius},${latitude},${longitude});
-
-        //         nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
-        //             ["amenity"]
-        //             (around:${radius},${latitude},${longitude});
-
-        //         nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
-        //             ["shop"]
-        //             (around:${radius},${latitude},${longitude});
-        //     );
-
-        //     out center tags;
-        // `;
-
         const query = `
-            [out:json][timeout:15];
+            [out:json][timeout:10];
 
             nwr["amenity"="cafe"]
                 (around:${radius},${latitude},${longitude});
@@ -65,22 +60,38 @@ export default async function handler(request) {
             out center tags;
         `;
 
-        const overpassResponse = await fetch(
-            "https://overpass-api.de/api/interpreter",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "Caferanggot/1.0"
-                },
-                body: new URLSearchParams({
-                    data: query
-                })
-            }
-        );
+        const controller = new AbortController();
+
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, 12000);
+
+        let overpassResponse;
+
+        try {
+            overpassResponse = await fetch(
+                "https://overpass.private.coffee/api/interpreter",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/x-www-form-urlencoded",
+                        "User-Agent":
+                            "Caferanggot/1.0"
+                    },
+                    body: new URLSearchParams({
+                        data: query
+                    }),
+                    signal: controller.signal
+                }
+            );
+        } finally {
+            clearTimeout(timeout);
+        }
 
         if (!overpassResponse.ok) {
-            const errorText = await overpassResponse.text();
+            const errorText =
+                await overpassResponse.text();
 
             return new Response(
                 JSON.stringify({
@@ -91,26 +102,46 @@ export default async function handler(request) {
                 {
                     status: 502,
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type":
+                            "application/json"
                     }
                 }
             );
         }
 
-        const data = await overpassResponse.json();
+        const data =
+            await overpassResponse.json();
 
         return new Response(
             JSON.stringify(data),
             {
                 status: 200,
                 headers: {
-                    "Content-Type": "application/json",
-                    "Cache-Control": "public, max-age=60"
+                    "Content-Type":
+                        "application/json",
+                    "Cache-Control":
+                        "public, max-age=60"
                 }
             }
         );
 
     } catch (error) {
+        if (error.name === "AbortError") {
+            return new Response(
+                JSON.stringify({
+                    error:
+                        "Cafe search timed out. Please try again."
+                }),
+                {
+                    status: 504,
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    }
+                }
+            );
+        }
+
         return new Response(
             JSON.stringify({
                 error: "Server error",
@@ -119,7 +150,8 @@ export default async function handler(request) {
             {
                 status: 500,
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type":
+                        "application/json"
                 }
             }
         );
