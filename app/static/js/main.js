@@ -50,7 +50,11 @@ btnReset.addEventListener("click", () => {
 function getUserLocation() {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
-            reject(new Error("Geolocation is not supported by this browser."));
+            reject(
+                new Error(
+                    "Geolocation is not supported by this browser."
+                )
+            );
             return;
         }
 
@@ -73,7 +77,8 @@ function getUserLocation() {
                         break;
 
                     case error.POSITION_UNAVAILABLE:
-                        message = "Your location is currently unavailable.";
+                        message =
+                            "Your location is currently unavailable.";
                         break;
 
                     case error.TIMEOUT:
@@ -97,69 +102,44 @@ async function findNearbyCafes() {
         const location = await getUserLocation();
         const radius = 5000;
 
-        const query = `
-    [out:json][timeout:25];
-
-    (
-        nwr["amenity"="cafe"]
-            (around:${radius},${location.latitude},${location.longitude});
-
-        nwr["shop"="coffee"]
-            (around:${radius},${location.latitude},${location.longitude});
-
-        nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
-            ["amenity"]
-            (around:${radius},${location.latitude},${location.longitude});
-
-        nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
-            ["shop"]
-            (around:${radius},${location.latitude},${location.longitude});
-    );
-
-    out center tags;
-`;
-
-        const response = await fetch(
-            "https://overpass-api.de/api/interpreter",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                body: new URLSearchParams({
-                    data: query
-                })
-            }
-        );
+        const response = await fetch("/api/cafes", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                latitude: location.latitude,
+                longitude: location.longitude,
+                radius: radius
+            })
+        });
 
         if (!response.ok) {
-            throw new Error(`Overpass request failed: ${response.status}`);
+            let errorMessage = `Cafe search failed: ${response.status}`;
+
+            try {
+                const errorData = await response.json();
+
+                if (errorData.details) {
+                    errorMessage = errorData.details;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch {
+            }
+
+            throw new Error(errorMessage);
         }
 
         const data = await response.json();
 
-        const keywords = [
-            "coffee",
-            "cafe",
-            "café",
-            "kape",
-            "kapehan",
-            "brew",
-            "espresso",
-            "kopi",
-            "kaffee"
-        ];
+        if (!data.elements || !Array.isArray(data.elements)) {
+            throw new Error("Invalid response from cafe search.");
+        }
 
         cafes = data.elements
             .map(convertOverpassCafe)
             .filter(Boolean)
-            .filter((cafe) => {
-                const name = cafe.name.toLowerCase();
-
-                return keywords.some((keyword) =>
-                    name.includes(keyword)
-                );
-            })
             .map((cafe) => {
                 cafe.distance = calculateDistance(
                     userLatitude,
@@ -175,11 +155,11 @@ async function findNearbyCafes() {
 
         cafes = removeDuplicates(cafes);
 
-        cafes = cafes;
+        cafes = cafes.slice(0, 20);
 
         renderCafes();
-
         setState("results");
+
     } catch (error) {
         console.error("Cafe search error:", error);
 
@@ -195,7 +175,10 @@ function convertOverpassCafe(element) {
     let latitude = element.lat;
     let longitude = element.lon;
 
-    if (latitude === undefined && element.center) {
+    if (
+        latitude === undefined &&
+        element.center
+    ) {
         latitude = element.center.lat;
         longitude = element.center.lon;
     }
@@ -220,11 +203,19 @@ function convertOverpassCafe(element) {
         longitude: longitude,
         address: buildAddress(tags),
         openingHours: tags.opening_hours || null,
-        phone: tags.phone || tags["contact:phone"] || null,
-        website: tags.website || tags["contact:website"] || null,
+        phone:
+            tags.phone ||
+            tags["contact:phone"] ||
+            null,
+        website:
+            tags.website ||
+            tags["contact:website"] ||
+            null,
         cuisine: tags.cuisine || null,
-        outdoorSeating: tags.outdoor_seating === "yes",
-        wheelchair: tags.wheelchair || null,
+        outdoorSeating:
+            tags.outdoor_seating === "yes",
+        wheelchair:
+            tags.wheelchair || null,
         rawTags: tags
     };
 }
@@ -259,7 +250,12 @@ function buildAddress(tags) {
     return parts.join(", ");
 }
 
-function calculateDistance(lat1, lon1, lat2, lon2) {
+function calculateDistance(
+    lat1,
+    lon1,
+    lat2,
+    lon2
+) {
     const earthRadius = 6371;
 
     const dLat = toRadians(lat2 - lat1);
@@ -287,7 +283,9 @@ function toRadians(degrees) {
 
 function formatDistance(distanceKm) {
     if (distanceKm < 1) {
-        const meters = Math.round(distanceKm * 1000);
+        const meters = Math.round(
+            distanceKm * 1000
+        );
 
         return `${meters} m away`;
     }
@@ -313,7 +311,9 @@ function getCafeStatus(cafe) {
         };
     }
 
-    const status = parseOpeningHours(cafe.openingHours);
+    const status = parseOpeningHours(
+        cafe.openingHours
+    );
 
     if (status === true) {
         return {
@@ -389,18 +389,23 @@ function parseOpeningHours(value) {
         );
 
         if (dayMatch) {
-            const startDay = dayNames.indexOf(
-                dayMatch[1].toLowerCase()
-            );
+            const startDay =
+                dayNames.indexOf(
+                    dayMatch[1].toLowerCase()
+                );
 
             const endDay = dayMatch[2]
-                ? dayNames.indexOf(dayMatch[2].toLowerCase())
+                ? dayNames.indexOf(
+                    dayMatch[2].toLowerCase()
+                )
                 : startDay;
 
             const applies =
                 startDay <= endDay
-                    ? day >= startDay && day <= endDay
-                    : day >= startDay || day <= endDay;
+                    ? day >= startDay &&
+                      day <= endDay
+                    : day >= startDay ||
+                      day <= endDay;
 
             if (applies) {
                 foundDayRule = true;
@@ -413,7 +418,10 @@ function parseOpeningHours(value) {
             continue;
         }
 
-        if (!foundDayRule && sections.length === 1) {
+        if (
+            !foundDayRule &&
+            sections.length === 1
+        ) {
             currentDayRule = cleanSection;
         }
     }
@@ -428,21 +436,28 @@ function parseOpeningHours(value) {
 
     if (
         currentDayRule.includes("open") &&
-        !/\d{1,2}[:.]\d{2}/.test(currentDayRule)
+        !/\d{1,2}[:.]\d{2}/.test(
+            currentDayRule
+        )
     ) {
         return true;
     }
 
-    const timeRanges = currentDayRule.match(
-        /\d{1,2}(?::|\.)?\d{0,2}\s*-\s*\d{1,2}(?::|\.)?\d{0,2}/g
-    );
+    const timeRanges =
+        currentDayRule.match(
+            /\d{1,2}(?::|\.)?\d{0,2}\s*-\s*\d{1,2}(?::|\.)?\d{0,2}/g
+        );
 
-    if (!timeRanges || timeRanges.length === 0) {
+    if (
+        !timeRanges ||
+        timeRanges.length === 0
+    ) {
         return null;
     }
 
     const currentMinutes =
-        now.getHours() * 60 + now.getMinutes();
+        now.getHours() * 60 +
+        now.getMinutes();
 
     for (const range of timeRanges) {
         const parts = range.split("-");
@@ -454,7 +469,10 @@ function parseOpeningHours(value) {
         const start = parseTime(parts[0]);
         const end = parseTime(parts[1]);
 
-        if (start === null || end === null) {
+        if (
+            start === null ||
+            end === null
+        ) {
             continue;
         }
 
@@ -483,7 +501,10 @@ function parseTime(value) {
 
     const parts = clean.split(":");
 
-    let hour = parseInt(parts[0], 10);
+    let hour = parseInt(
+        parts[0],
+        10
+    );
 
     let minute = parts[1]
         ? parseInt(parts[1], 10)
@@ -492,7 +513,7 @@ function parseTime(value) {
     if (
         Number.isNaN(hour) ||
         Number.isNaN(minute) ||
-        hour > 23 ||
+        hour > 24 ||
         minute > 59
     ) {
         return null;
@@ -542,7 +563,9 @@ function getCafeTags(cafe) {
     }
 
     if (cafe.wheelchair === "yes") {
-        tags.push("Wheelchair accessible");
+        tags.push(
+            "Wheelchair accessible"
+        );
     }
 
     if (tags.length === 0) {
@@ -576,7 +599,9 @@ function renderCafes() {
         cafeList.innerHTML = `
             <div class="empty-state">
                 <p>No cafés found nearby.</p>
-                <small>Try searching again or move to another area.</small>
+                <small>
+                    Try searching again or move to another area.
+                </small>
             </div>
         `;
 
@@ -588,24 +613,32 @@ function renderCafes() {
     updateResultsHeader(cafes.length);
 
     cafes.forEach((cafe) => {
-        const card = createCafeCard(cafe);
+        const card =
+            createCafeCard(cafe);
 
         cafeList.appendChild(card);
     });
 }
 
 function createCafeCard(cafe) {
-    const button = document.createElement("button");
+    const button =
+        document.createElement("button");
 
     button.type = "button";
     button.className = "cafe-card";
     button.dataset.id = cafe.id;
 
-    const signal = getSignal(cafe.distance);
-    const status = getCafeStatus(cafe);
+    const signal =
+        getSignal(cafe.distance);
+
+    const status =
+        getCafeStatus(cafe);
 
     button.innerHTML = `
-        <span class="signal s${signal}" aria-hidden="true">
+        <span
+            class="signal s${signal}"
+            aria-hidden="true"
+        >
             <i></i>
             <i></i>
             <i></i>
@@ -618,20 +651,30 @@ function createCafeCard(cafe) {
             </strong>
 
             <span class="cafe-meta">
-                ${escapeHTML(formatDistance(cafe.distance))}
+                ${escapeHTML(
+                    formatDistance(
+                        cafe.distance
+                    )
+                )}
             </span>
         </span>
 
-        <span class="status-badge ${status.open ? "open" : ""}">
+        <span
+            class="status-badge ${
+                status.open ? "open" : ""
+            }"
+        >
             ${escapeHTML(status.text)}
         </span>
     `;
 
-    button.addEventListener("click", () => {
-        lastFocused = button;
-
-        openSheet(cafe);
-    });
+    button.addEventListener(
+        "click",
+        () => {
+            lastFocused = button;
+            openSheet(cafe);
+        }
+    );
 
     return button;
 }
@@ -642,24 +685,32 @@ function updateResultsHeader(count) {
     }
 
     if (count === 1) {
-        resultsHead.textContent = "1 café searched";
+        resultsHead.textContent =
+            "1 café searched";
 
         return;
     }
 
-    resultsHead.textContent = `${count} cafés searched`;
+    resultsHead.textContent =
+        `${count} cafés searched`;
 }
 
 function openSheet(cafe) {
     selectedCafe = cafe;
 
-    const signal = getSignal(cafe.distance);
-    const status = getCafeStatus(cafe);
+    const signal =
+        getSignal(cafe.distance);
 
-    sheetName.textContent = cafe.name;
+    const status =
+        getCafeStatus(cafe);
+
+    sheetName.textContent =
+        cafe.name;
 
     sheetWalk.textContent =
-        formatWalkingDistance(cafe.distance);
+        formatWalkingDistance(
+            cafe.distance
+        );
 
     sheetStatus.textContent =
         status.text;
@@ -673,22 +724,27 @@ function openSheet(cafe) {
         `signal s${signal}`;
 
     sheetDesc.textContent =
-        cafe.address || "Address not available";
+        cafe.address ||
+        "Address not available";
 
     if (cafe.openingHours) {
         sheetStreet.textContent =
             cafe.openingHours;
     } else {
         sheetStreet.textContent =
-            formatDistance(cafe.distance);
+            formatDistance(
+                cafe.distance
+            );
     }
 
     sheetTags.innerHTML = "";
 
-    const tags = getCafeTags(cafe);
+    const tags =
+        getCafeTags(cafe);
 
     tags.forEach((tag) => {
-        const span = document.createElement("span");
+        const span =
+            document.createElement("span");
 
         span.className = "tag";
         span.textContent = tag;
@@ -767,7 +823,10 @@ function showSearchError(message) {
     cafeList.innerHTML = `
         <div class="empty-state">
             <p>Search failed.</p>
-            <small>Check your connection and try again.</small>
+            <small>
+                Check your internet connection or
+                location settings and try again.
+            </small>
         </div>
     `;
 
@@ -775,9 +834,11 @@ function showSearchError(message) {
 }
 
 function escapeHTML(value) {
-    const div = document.createElement("div");
+    const div =
+        document.createElement("div");
 
-    div.textContent = String(value ?? "");
+    div.textContent =
+        String(value ?? "");
 
     return div.innerHTML;
 }
