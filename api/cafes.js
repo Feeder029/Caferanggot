@@ -70,7 +70,7 @@ export default async function handler(request) {
 
         try {
             overpassResponse = await fetch(
-                "https://overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter",
                 {
                     method: "POST",
                     headers: {
