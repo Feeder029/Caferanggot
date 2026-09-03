@@ -98,30 +98,26 @@ async function findNearbyCafes() {
         const radius = 5000;
 
         const query = `
-            [out:json][timeout:25];
+    [out:json][timeout:25];
 
-            (
-                node["amenity"="cafe"]
-                    (around:${radius},${location.latitude},${location.longitude});
+    (
+        nwr["amenity"="cafe"]
+            (around:${radius},${location.latitude},${location.longitude});
 
-                way["amenity"="cafe"]
-                    (around:${radius},${location.latitude},${location.longitude});
+        nwr["shop"="coffee"]
+            (around:${radius},${location.latitude},${location.longitude});
 
-                relation["amenity"="cafe"]
-                    (around:${radius},${location.latitude},${location.longitude});
+        nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
+            ["amenity"]
+            (around:${radius},${location.latitude},${location.longitude});
 
-                node["shop"="coffee"]
-                    (around:${radius},${location.latitude},${location.longitude});
+        nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
+            ["shop"]
+            (around:${radius},${location.latitude},${location.longitude});
+    );
 
-                way["shop"="coffee"]
-                    (around:${radius},${location.latitude},${location.longitude});
-
-                relation["shop"="coffee"]
-                    (around:${radius},${location.latitude},${location.longitude});
-            );
-
-            out center tags;
-        `;
+    out center tags;
+`;
 
         const response = await fetch(
             "https://overpass-api.de/api/interpreter",
