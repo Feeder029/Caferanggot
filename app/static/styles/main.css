@@ -35,10 +35,6 @@
     width:100%;
     min-height:100vh;
     background:var(--bg-device);
-    background-image:
-      repeating-radial-gradient(circle at 50% 38%,
-        rgba(201,151,62,0.05) 0px, rgba(201,151,62,0.05) 1px,
-        transparent 1px, transparent 64px);
   }
  
   .brandmark{
@@ -47,7 +43,7 @@
     text-align:center;
     font-family:'Instrument Serif', serif;
     font-style:italic;
-    font-size:22px;
+    font-size:35px;
     letter-spacing:0.2px;
     color:var(--cream);
     opacity:0.9;
@@ -55,7 +51,7 @@
   }
  
   @media (min-width:700px){
-    .brandmark{ top:44px; font-size:25px; }
+    .brandmark{ top:44px; font-size:35px; }
   }
  
   /* ---------- screens ---------- */

@@ -1,849 +1,273 @@
-// ============================================================
-// STATE
-// ============================================================
+const device = document.getElementById("device");
 
-const device = document.getElementById('device');
-
-function setState(state) {
+const setState = (state) => {
     device.dataset.state = state;
-}
+};
 
+const btnWelcome = document.getElementById("btnWelcome");
+const btnReady = document.getElementById("btnReady");
+const btnCancelReady = document.getElementById("btnCancelReady");
+const btnReset = document.getElementById("btnReset");
 
-// ============================================================
-// ELEMENTS
-// ============================================================
+const cafeList = document.querySelector(".cafe-list");
+const resultsHead = document.querySelector(".results-head");
 
-const btnWelcome = document.getElementById('btnWelcome');
-const btnReady = document.getElementById('btnReady');
-const btnCancelReady = document.getElementById('btnCancelReady');
-const btnReset = document.getElementById('btnReset');
-
-const cafeList = document.getElementById('cafeList');
-
-const scrim = document.getElementById('scrim');
-const sheet = document.getElementById('sheet');
-
-const sheetSignal = document.getElementById('sheetSignal');
-const sheetName = document.getElementById('sheetName');
-const sheetWalk = document.getElementById('sheetWalk');
-const sheetStatus = document.getElementById('sheetStatus');
-const sheetDesc = document.getElementById('sheetDesc');
-const sheetTags = document.getElementById('sheetTags');
-const sheetStreet = document.getElementById('sheetStreet');
-
-const sheetClose = document.getElementById('sheetClose');
-const directionsBtn = document.querySelector('.sheet-footer .pill');
-
-
-// ============================================================
-// CURRENT LOCATION
-// ============================================================
+const scrim = document.getElementById("scrim");
+const sheet = document.getElementById("sheet");
+const sheetSignal = document.getElementById("sheetSignal");
+const sheetName = document.getElementById("sheetName");
+const sheetWalk = document.getElementById("sheetWalk");
+const sheetStatus = document.getElementById("sheetStatus");
+const sheetDesc = document.getElementById("sheetDesc");
+const sheetTags = document.getElementById("sheetTags");
+const sheetStreet = document.getElementById("sheetStreet");
+const sheetClose = document.getElementById("sheetClose");
 
 let userLatitude = null;
 let userLongitude = null;
-
-
-// ============================================================
-// CURRENT SELECTED CAFE
-// ============================================================
-
+let cafes = [];
+let lastFocused = null;
 let selectedCafe = null;
 
-
-// ============================================================
-// WELCOME → READY
-// ============================================================
-
-btnWelcome.addEventListener('click', () => {
-    setState('ready');
+btnWelcome.addEventListener("click", () => {
+    setState("ready");
 });
 
-
-// ============================================================
-// READY → WELCOME
-// ============================================================
-
-btnCancelReady.addEventListener('click', () => {
-    setState('welcome');
+btnReady.addEventListener("click", () => {
+    setState("listening");
+    findNearbyCafes();
 });
 
-
-// ============================================================
-// START SEARCH
-// ============================================================
-
-btnReady.addEventListener('click', () => {
-
-    setState('listening');
-
-    getUserLocation();
-
+btnCancelReady.addEventListener("click", () => {
+    setState("welcome");
 });
 
-
-// ============================================================
-// GET USER LOCATION
-// ============================================================
+btnReset.addEventListener("click", () => {
+    closeSheet();
+    setState("welcome");
+});
 
 function getUserLocation() {
-
-    if (!navigator.geolocation) {
-
-        showLocationError(
-            'Geolocation is not supported by your browser.'
-        );
-
-        return;
-    }
-
-
-    navigator.geolocation.getCurrentPosition(
-
-        // SUCCESS
-        async (position) => {
-
-            userLatitude = position.coords.latitude;
-            userLongitude = position.coords.longitude;
-
-            console.log('Latitude:', userLatitude);
-            console.log('Longitude:', userLongitude);
-
-            await searchCafes();
-
-        },
-
-        // ERROR
-        (error) => {
-
-            console.error('Location error:', error);
-
-            let message = 'Unable to get your location.';
-
-            if (error.code === 1) {
-                message = 'Location permission was denied.';
-            }
-
-            if (error.code === 2) {
-                message = 'Your location could not be determined.';
-            }
-
-            if (error.code === 3) {
-                message = 'Location request timed out.';
-            }
-
-            showLocationError(message);
-
-        },
-
-        // OPTIONS
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error("Geolocation is not supported by this browser."));
+            return;
         }
 
-    );
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                userLatitude = position.coords.latitude;
+                userLongitude = position.coords.longitude;
 
+                resolve({
+                    latitude: userLatitude,
+                    longitude: userLongitude
+                });
+            },
+            (error) => {
+                let message = "Unable to get your location.";
+
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        message = "Location permission was denied.";
+                        break;
+
+                    case error.POSITION_UNAVAILABLE:
+                        message = "Your location is currently unavailable.";
+                        break;
+
+                    case error.TIMEOUT:
+                        message = "Location request timed out.";
+                        break;
+                }
+
+                reject(new Error(message));
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 30000
+            }
+        );
+    });
 }
 
-
-// ============================================================
-// LOCATION ERROR
-// ============================================================
-
-function showLocationError(message) {
-
-    alert(message);
-
-    setState('welcome');
-
-}
-
-
-// ============================================================
-// SEARCH CAFES
-// ============================================================
-//
-// IMPORTANT:
-//
-// Replace the API URL below with the API you decide to use.
-//
-// Example:
-// https://your-api.com/search
-//
-// The API should return cafe/place information.
-//
-// ============================================================
-
-async function searchCafes() {
-
+async function findNearbyCafes() {
     try {
+        const location = await getUserLocation();
+        const radius = 5000;
 
-        /*
-         * ------------------------------------------------------
-         * REPLACE THIS URL
-         * ------------------------------------------------------
-         */
+        const query = `
+            [out:json][timeout:25];
 
-        const API_URL = 'YOUR_API_URL_HERE';
+            (
+                node["amenity"="cafe"]
+                    (around:${radius},${location.latitude},${location.longitude});
 
+                way["amenity"="cafe"]
+                    (around:${radius},${location.latitude},${location.longitude});
 
-        /*
-         * ------------------------------------------------------
-         * CREATE REQUEST URL
-         * ------------------------------------------------------
-         */
+                relation["amenity"="cafe"]
+                    (around:${radius},${location.latitude},${location.longitude});
 
-        const url =
-            `${API_URL}?latitude=${userLatitude}` +
-            `&longitude=${userLongitude}` +
-            `&radius=2000`;
+                node["shop"="coffee"]
+                    (around:${radius},${location.latitude},${location.longitude});
 
+                way["shop"="coffee"]
+                    (around:${radius},${location.latitude},${location.longitude});
 
-        console.log('Searching:', url);
-
-
-        /*
-         * ------------------------------------------------------
-         * CALL API
-         * ------------------------------------------------------
-         */
-
-        const response = await fetch(url);
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `API request failed: ${response.status}`
+                relation["shop"="coffee"]
+                    (around:${radius},${location.latitude},${location.longitude});
             );
 
+            out center tags;
+        `;
+
+        const response = await fetch(
+            "https://overpass-api.de/api/interpreter",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({
+                    data: query
+                })
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Overpass request failed: ${response.status}`);
         }
-
-
-        /*
-         * ------------------------------------------------------
-         * GET JSON
-         * ------------------------------------------------------
-         */
 
         const data = await response.json();
 
+        const keywords = [
+            "coffee",
+            "cafe",
+            "café",
+            "kape",
+            "kapehan",
+            "brew",
+            "espresso",
+            "kopi",
+            "kaffee"
+        ];
 
-        console.log('API response:', data);
+        cafes = data.elements
+            .map(convertOverpassCafe)
+            .filter(Boolean)
+            .filter((cafe) => {
+                const name = cafe.name.toLowerCase();
 
+                return keywords.some((keyword) =>
+                    name.includes(keyword)
+                );
+            })
+            .map((cafe) => {
+                cafe.distance = calculateDistance(
+                    userLatitude,
+                    userLongitude,
+                    cafe.latitude,
+                    cafe.longitude
+                );
 
-        /*
-         * ------------------------------------------------------
-         * CONVERT API DATA
-         * ------------------------------------------------------
-         */
+                return cafe;
+            });
 
-        const cafes = convertApiData(data);
+        cafes.sort((a, b) => a.distance - b.distance);
 
+        cafes = removeDuplicates(cafes);
 
-        /*
-         * ------------------------------------------------------
-         * DISPLAY RESULTS
-         * ------------------------------------------------------
-         */
+        cafes = cafes;
 
-        displayCafes(cafes);
+        renderCafes();
 
-
-        /*
-         * ------------------------------------------------------
-         * RESULTS STATE
-         * ------------------------------------------------------
-         */
-
-        setState('results');
-
-
+        setState("results");
     } catch (error) {
+        console.error("Cafe search error:", error);
 
-        console.error('Cafe search error:', error);
+        showSearchError(error.message);
 
-        alert(
-            'Something went wrong while searching for cafés.'
-        );
-
-        setState('welcome');
-
+        setState("results");
     }
-
 }
 
+function convertOverpassCafe(element) {
+    const tags = element.tags || {};
 
-// ============================================================
-// CONVERT API DATA
-// ============================================================
-//
-// Different APIs return different JSON structures.
-//
-// This function converts the API response into the format
-// Caferanggot uses.
-//
-// You may need to change this depending on your API.
-// ============================================================
+    let latitude = element.lat;
+    let longitude = element.lon;
 
-function convertApiData(data) {
-
-    /*
-     * Example expected API response:
-     *
-     * {
-     *     cafes: [
-     *         {
-     *             id: "123",
-     *             name: "Coffee Shop",
-     *             latitude: 15.123,
-     *             longitude: 120.123,
-     *             address: "123 Main Street",
-     *             open: true
-     *         }
-     *     ]
-     * }
-     */
-
-
-    if (!data || !Array.isArray(data.cafes)) {
-
-        console.warn(
-            'API response does not contain a cafes array.'
-        );
-
-        return [];
-
+    if (latitude === undefined && element.center) {
+        latitude = element.center.lat;
+        longitude = element.center.lon;
     }
-
-
-    return data.cafes.map(cafe => {
-
-        const distance = calculateDistance(
-            userLatitude,
-            userLongitude,
-            cafe.latitude,
-            cafe.longitude
-        );
-
-
-        return {
-
-            id: cafe.id,
-
-            name: cafe.name || 'Unnamed Café',
-
-            latitude: cafe.latitude,
-
-            longitude: cafe.longitude,
-
-            address:
-                cafe.address ||
-                'Address unavailable',
-
-            open:
-                cafe.open ?? null,
-
-            distance: distance,
-
-            distanceText:
-                formatDistance(distance),
-
-            description:
-                cafe.description ||
-                'No description available.',
-
-            tags:
-                cafe.tags ||
-                ['Coffee'],
-
-            signal:
-                getSignal(distance)
-
-        };
-
-    });
-
-}
-
-
-// ============================================================
-// DISPLAY CAFES
-// ============================================================
-
-function displayCafes(cafes) {
-
-    cafeList.innerHTML = '';
-
-
-    /*
-     * No results
-     */
-
-    if (cafes.length === 0) {
-
-        cafeList.innerHTML = `
-            <p style="
-                text-align:center;
-                color:var(--cream-dim);
-                padding:30px 0;
-            ">
-                No cafés found nearby.
-            </p>
-        `;
-
-        updateResultsHeading(0);
-
-        return;
-    }
-
-
-    /*
-     * Sort closest first
-     */
-
-    cafes.sort((a, b) => {
-        return a.distance - b.distance;
-    });
-
-
-    /*
-     * Limit results
-     */
-
-    const limitedCafes = cafes.slice(0, 10);
-
-
-    /*
-     * Update heading
-     */
-
-    updateResultsHeading(limitedCafes.length);
-
-
-    /*
-     * Create cards
-     */
-
-    limitedCafes.forEach(cafe => {
-
-        const card = createCafeCard(cafe);
-
-        cafeList.appendChild(card);
-
-    });
-
-}
-
-
-// ============================================================
-// UPDATE RESULTS HEADING
-// ============================================================
-
-function updateResultsHeading(count) {
-
-    const heading =
-        document.querySelector('.results-head h1');
-
-    if (!heading) return;
-
-
-    if (count === 0) {
-
-        heading.textContent =
-            'No cafés found';
-
-        return;
-    }
-
-
-    heading.textContent =
-        `${count} café${count !== 1 ? 's' : ''} listening back`;
-
-}
-
-
-// ============================================================
-// CREATE CAFE CARD
-// ============================================================
-
-function createCafeCard(cafe) {
-
-    const card =
-        document.createElement('button');
-
-    card.className = 'cafe-card';
-
-    card.type = 'button';
-
-
-    /*
-     * SIGNAL
-     */
-
-    const signal =
-        document.createElement('div');
-
-    signal.className =
-        `signal s${cafe.signal}`;
-
-    signal.setAttribute(
-        'aria-hidden',
-        'true'
-    );
-
-
-    for (let i = 0; i < 4; i++) {
-
-        const bar =
-            document.createElement('i');
-
-        signal.appendChild(bar);
-
-    }
-
-
-    /*
-     * INFO
-     */
-
-    const info =
-        document.createElement('div');
-
-    info.className = 'cafe-info';
-
-
-    const name =
-        document.createElement('p');
-
-    name.className = 'cafe-name';
-
-    name.textContent = cafe.name;
-
-
-    const meta =
-        document.createElement('p');
-
-    meta.className = 'cafe-meta';
-
-    meta.textContent =
-        cafe.distanceText;
-
-
-    info.appendChild(name);
-    info.appendChild(meta);
-
-
-    /*
-     * STATUS
-     */
-
-    const status =
-        document.createElement('span');
-
-    status.className = 'status-badge';
-
-
-    if (cafe.open === true) {
-
-        status.classList.add('open');
-
-        status.textContent =
-            'Open now';
-
-    }
-
-    else if (cafe.open === false) {
-
-        status.textContent =
-            'Closed';
-
-    }
-
-    else {
-
-        status.textContent =
-            'Hours unavailable';
-
-    }
-
-
-    /*
-     * BUILD CARD
-     */
-
-    card.appendChild(signal);
-    card.appendChild(info);
-    card.appendChild(status);
-
-
-    /*
-     * CLICK
-     */
-
-    card.addEventListener('click', () => {
-
-        openSheet(cafe);
-
-    });
-
-
-    return card;
-
-}
-
-
-// ============================================================
-// OPEN CAFE DETAIL SHEET
-// ============================================================
-
-function openSheet(cafe) {
-
-    if (!cafe) return;
-
-
-    selectedCafe = cafe;
-
-
-    /*
-     * Name
-     */
-
-    sheetName.textContent =
-        cafe.name;
-
-
-    /*
-     * Distance
-     */
-
-    sheetWalk.textContent =
-        cafe.distanceText;
-
-
-    /*
-     * Description
-     */
-
-    sheetDesc.textContent =
-        cafe.description;
-
-
-    /*
-     * Address
-     */
-
-    sheetStreet.textContent =
-        cafe.address;
-
-
-    /*
-     * Status
-     */
-
-    if (cafe.open === true) {
-
-        sheetStatus.textContent =
-            'Open now';
-
-        sheetStatus.classList.add('open');
-
-    }
-
-    else if (cafe.open === false) {
-
-        sheetStatus.textContent =
-            'Closed';
-
-        sheetStatus.classList.remove('open');
-
-    }
-
-    else {
-
-        sheetStatus.textContent =
-            'Hours unavailable';
-
-        sheetStatus.classList.remove('open');
-
-    }
-
-
-    /*
-     * Signal
-     */
-
-    sheetSignal.className =
-        `signal s${cafe.signal}`;
-
-
-    /*
-     * Tags
-     */
-
-    sheetTags.innerHTML = '';
-
-
-    cafe.tags.forEach(tag => {
-
-        const span =
-            document.createElement('span');
-
-        span.className = 'tag';
-
-        span.textContent = tag;
-
-        sheetTags.appendChild(span);
-
-    });
-
-
-    /*
-     * Show sheet
-     */
-
-    scrim.classList.add('show');
-
-    sheet.classList.add('show');
-
-
-    /*
-     * Focus close button
-     */
-
-    sheetClose.focus();
-
-}
-
-
-// ============================================================
-// CLOSE DETAIL SHEET
-// ============================================================
-
-function closeSheet() {
-
-    scrim.classList.remove('show');
-
-    sheet.classList.remove('show');
-
-    selectedCafe = null;
-
-}
-
-
-// ============================================================
-// CLOSE BUTTON
-// ============================================================
-
-sheetClose.addEventListener(
-    'click',
-    closeSheet
-);
-
-
-// ============================================================
-// CLICK SCRIM
-// ============================================================
-
-scrim.addEventListener(
-    'click',
-    closeSheet
-);
-
-
-// ============================================================
-// ESC KEY
-// ============================================================
-
-document.addEventListener('keydown', (event) => {
 
     if (
-        event.key === 'Escape' &&
-        sheet.classList.contains('show')
+        latitude === undefined ||
+        longitude === undefined
     ) {
-
-        closeSheet();
-
+        return null;
     }
 
-});
+    const name = tags.name;
 
-
-// ============================================================
-// GET DIRECTIONS
-// ============================================================
-
-directionsBtn.addEventListener('click', () => {
-
-    if (!selectedCafe) return;
-
-
-    if (
-        selectedCafe.latitude == null ||
-        selectedCafe.longitude == null
-    ) {
-
-        alert(
-            'Directions are unavailable for this café.'
-        );
-
-        return;
-
+    if (!name) {
+        return null;
     }
 
+    return {
+        id: `${element.type}-${element.id}`,
+        name: name,
+        latitude: latitude,
+        longitude: longitude,
+        address: buildAddress(tags),
+        openingHours: tags.opening_hours || null,
+        phone: tags.phone || tags["contact:phone"] || null,
+        website: tags.website || tags["contact:website"] || null,
+        cuisine: tags.cuisine || null,
+        outdoorSeating: tags.outdoor_seating === "yes",
+        wheelchair: tags.wheelchair || null,
+        rawTags: tags
+    };
+}
 
-    const url =
-        `https://www.google.com/maps/dir/?api=1` +
-        `&origin=${userLatitude},${userLongitude}` +
-        `&destination=${selectedCafe.latitude},${selectedCafe.longitude}`;
+function buildAddress(tags) {
+    const parts = [];
 
+    if (tags["addr:housenumber"]) {
+        parts.push(tags["addr:housenumber"]);
+    }
 
-    window.open(url, '_blank');
+    if (tags["addr:street"]) {
+        parts.push(tags["addr:street"]);
+    }
 
-});
+    if (tags["addr:suburb"]) {
+        parts.push(tags["addr:suburb"]);
+    }
 
+    if (tags["addr:city"]) {
+        parts.push(tags["addr:city"]);
+    }
 
-// ============================================================
-// SEARCH AGAIN
-// ============================================================
+    if (tags["addr:postcode"]) {
+        parts.push(tags["addr:postcode"]);
+    }
 
-btnReset.addEventListener('click', () => {
+    if (parts.length === 0) {
+        return "Address not available";
+    }
 
-    cafeList.innerHTML = '';
+    return parts.join(", ");
+}
 
-    selectedCafe = null;
-
-    setState('welcome');
-
-});
-
-
-// ============================================================
-// DISTANCE CALCULATION
-// ============================================================
-//
-// Haversine formula
-//
-// Returns distance in kilometers.
-// ============================================================
-
-function calculateDistance(
-    lat1,
-    lon1,
-    lat2,
-    lon2
-) {
-
+function calculateDistance(lat1, lon1, lat2, lon2) {
     const earthRadius = 6371;
 
-
-    const dLat =
-        toRadians(lat2 - lat1);
-
-    const dLon =
-        toRadians(lon2 - lon1);
-
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
 
     const a =
         Math.sin(dLat / 2) ** 2 +
@@ -851,60 +275,241 @@ function calculateDistance(
         Math.cos(toRadians(lat2)) *
         Math.sin(dLon / 2) ** 2;
 
-
     const c =
-        2 * Math.atan2(
+        2 *
+        Math.atan2(
             Math.sqrt(a),
             Math.sqrt(1 - a)
         );
 
-
     return earthRadius * c;
-
 }
-
-
-// ============================================================
-// DEGREES → RADIANS
-// ============================================================
 
 function toRadians(degrees) {
-
-    return degrees * (Math.PI / 180);
-
+    return degrees * Math.PI / 180;
 }
-
-
-// ============================================================
-// FORMAT DISTANCE
-// ============================================================
 
 function formatDistance(distanceKm) {
-
     if (distanceKm < 1) {
+        const meters = Math.round(distanceKm * 1000);
 
-        const meters =
-            Math.round(distanceKm * 1000);
-
-        return `About ${meters} m away`;
-
+        return `${meters} m away`;
     }
 
-
-    return `About ${distanceKm.toFixed(1)} km away`;
-
+    return `${distanceKm.toFixed(1)} km away`;
 }
 
+function formatWalkingDistance(distanceKm) {
+    const minutes = Math.max(
+        1,
+        Math.round(distanceKm / 5 * 60)
+    );
 
-// ============================================================
-// SIGNAL STRENGTH
-// ============================================================
-//
-// Just a visual representation based on distance.
-// ============================================================
+    return `About ${minutes} minutes on foot`;
+}
+
+function getCafeStatus(cafe) {
+    if (!cafe.openingHours) {
+        return {
+            text: "Hours unavailable",
+            open: false,
+            known: false
+        };
+    }
+
+    const status = parseOpeningHours(cafe.openingHours);
+
+    if (status === true) {
+        return {
+            text: "Open now",
+            open: true,
+            known: true
+        };
+    }
+
+    if (status === false) {
+        return {
+            text: "Closed",
+            open: false,
+            known: true
+        };
+    }
+
+    return {
+        text: "Hours available",
+        open: false,
+        known: false
+    };
+}
+
+function parseOpeningHours(value) {
+    const hours = value
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (
+        hours === "24/7" ||
+        hours === "24 hours" ||
+        hours === "open 24 hours"
+    ) {
+        return true;
+    }
+
+    if (
+        hours.includes("closed") &&
+        !/\d{1,2}[:.]\d{2}/.test(hours)
+    ) {
+        return false;
+    }
+
+    const now = new Date();
+    const day = now.getDay();
+
+    const dayNames = [
+        "su",
+        "mo",
+        "tu",
+        "we",
+        "th",
+        "fr",
+        "sa"
+    ];
+
+    const sections = hours.split(";");
+
+    let foundDayRule = false;
+    let currentDayRule = null;
+
+    for (const section of sections) {
+        const cleanSection = section.trim();
+
+        if (!cleanSection) {
+            continue;
+        }
+
+        const dayMatch = cleanSection.match(
+            /^(mo|tu|we|th|fr|sa|su)(?:\s*-\s*(mo|tu|we|th|fr|sa|su))?\s+/i
+        );
+
+        if (dayMatch) {
+            const startDay = dayNames.indexOf(
+                dayMatch[1].toLowerCase()
+            );
+
+            const endDay = dayMatch[2]
+                ? dayNames.indexOf(dayMatch[2].toLowerCase())
+                : startDay;
+
+            const applies =
+                startDay <= endDay
+                    ? day >= startDay && day <= endDay
+                    : day >= startDay || day <= endDay;
+
+            if (applies) {
+                foundDayRule = true;
+
+                currentDayRule = cleanSection
+                    .replace(dayMatch[0], "")
+                    .trim();
+            }
+
+            continue;
+        }
+
+        if (!foundDayRule && sections.length === 1) {
+            currentDayRule = cleanSection;
+        }
+    }
+
+    if (!currentDayRule) {
+        return null;
+    }
+
+    if (currentDayRule.includes("closed")) {
+        return false;
+    }
+
+    if (
+        currentDayRule.includes("open") &&
+        !/\d{1,2}[:.]\d{2}/.test(currentDayRule)
+    ) {
+        return true;
+    }
+
+    const timeRanges = currentDayRule.match(
+        /\d{1,2}(?::|\.)?\d{0,2}\s*-\s*\d{1,2}(?::|\.)?\d{0,2}/g
+    );
+
+    if (!timeRanges || timeRanges.length === 0) {
+        return null;
+    }
+
+    const currentMinutes =
+        now.getHours() * 60 + now.getMinutes();
+
+    for (const range of timeRanges) {
+        const parts = range.split("-");
+
+        if (parts.length !== 2) {
+            continue;
+        }
+
+        const start = parseTime(parts[0]);
+        const end = parseTime(parts[1]);
+
+        if (start === null || end === null) {
+            continue;
+        }
+
+        if (end < start) {
+            if (
+                currentMinutes >= start ||
+                currentMinutes <= end
+            ) {
+                return true;
+            }
+        } else if (
+            currentMinutes >= start &&
+            currentMinutes <= end
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function parseTime(value) {
+    const clean = value
+        .trim()
+        .replace(".", ":");
+
+    const parts = clean.split(":");
+
+    let hour = parseInt(parts[0], 10);
+
+    let minute = parts[1]
+        ? parseInt(parts[1], 10)
+        : 0;
+
+    if (
+        Number.isNaN(hour) ||
+        Number.isNaN(minute) ||
+        hour > 23 ||
+        minute > 59
+    ) {
+        return null;
+    }
+
+    if (hour === 24) {
+        hour = 0;
+    }
+
+    return hour * 60 + minute;
+}
 
 function getSignal(distanceKm) {
-
     if (distanceKm <= 0.5) {
         return 4;
     }
@@ -918,5 +523,265 @@ function getSignal(distanceKm) {
     }
 
     return 1;
+}
 
+function getCafeTags(cafe) {
+    const tags = [];
+
+    if (cafe.cuisine) {
+        cafe.cuisine
+            .split(";")
+            .slice(0, 2)
+            .forEach((item) => {
+                tags.push(
+                    item
+                        .replaceAll("_", " ")
+                        .trim()
+                );
+            });
+    }
+
+    if (cafe.outdoorSeating) {
+        tags.push("Outdoor seats");
+    }
+
+    if (cafe.wheelchair === "yes") {
+        tags.push("Wheelchair accessible");
+    }
+
+    if (tags.length === 0) {
+        tags.push("Cafe");
+    }
+
+    return tags.slice(0, 3);
+}
+
+function removeDuplicates(list) {
+    const seen = new Set();
+
+    return list.filter((cafe) => {
+        const key =
+            `${cafe.name.toLowerCase()}-${cafe.latitude.toFixed(5)}-${cafe.longitude.toFixed(5)}`;
+
+        if (seen.has(key)) {
+            return false;
+        }
+
+        seen.add(key);
+
+        return true;
+    });
+}
+
+function renderCafes() {
+    cafeList.innerHTML = "";
+
+    if (cafes.length === 0) {
+        cafeList.innerHTML = `
+            <div class="empty-state">
+                <p>No cafés found nearby.</p>
+                <small>Try searching again or move to another area.</small>
+            </div>
+        `;
+
+        updateResultsHeader(0);
+
+        return;
+    }
+
+    updateResultsHeader(cafes.length);
+
+    cafes.forEach((cafe) => {
+        const card = createCafeCard(cafe);
+
+        cafeList.appendChild(card);
+    });
+}
+
+function createCafeCard(cafe) {
+    const button = document.createElement("button");
+
+    button.type = "button";
+    button.className = "cafe-card";
+    button.dataset.id = cafe.id;
+
+    const signal = getSignal(cafe.distance);
+    const status = getCafeStatus(cafe);
+
+    button.innerHTML = `
+        <span class="signal s${signal}" aria-hidden="true">
+            <i></i>
+            <i></i>
+            <i></i>
+            <i></i>
+        </span>
+
+        <span class="cafe-info">
+            <strong class="cafe-name">
+                ${escapeHTML(cafe.name)}
+            </strong>
+
+            <span class="cafe-meta">
+                ${escapeHTML(formatDistance(cafe.distance))}
+            </span>
+        </span>
+
+        <span class="status-badge ${status.open ? "open" : ""}">
+            ${escapeHTML(status.text)}
+        </span>
+    `;
+
+    button.addEventListener("click", () => {
+        lastFocused = button;
+
+        openSheet(cafe);
+    });
+
+    return button;
+}
+
+function updateResultsHeader(count) {
+    if (!resultsHead) {
+        return;
+    }
+
+    if (count === 1) {
+        resultsHead.textContent = "1 café searched";
+
+        return;
+    }
+
+    resultsHead.textContent = `${count} cafés searched`;
+}
+
+function openSheet(cafe) {
+    selectedCafe = cafe;
+
+    const signal = getSignal(cafe.distance);
+    const status = getCafeStatus(cafe);
+
+    sheetName.textContent = cafe.name;
+
+    sheetWalk.textContent =
+        formatWalkingDistance(cafe.distance);
+
+    sheetStatus.textContent =
+        status.text;
+
+    sheetStatus.classList.toggle(
+        "open",
+        status.open
+    );
+
+    sheetSignal.className =
+        `signal s${signal}`;
+
+    sheetDesc.textContent =
+        cafe.address || "Address not available";
+
+    if (cafe.openingHours) {
+        sheetStreet.textContent =
+            cafe.openingHours;
+    } else {
+        sheetStreet.textContent =
+            formatDistance(cafe.distance);
+    }
+
+    sheetTags.innerHTML = "";
+
+    const tags = getCafeTags(cafe);
+
+    tags.forEach((tag) => {
+        const span = document.createElement("span");
+
+        span.className = "tag";
+        span.textContent = tag;
+
+        sheetTags.appendChild(span);
+    });
+
+    setupDirectionsButton(cafe);
+
+    scrim.classList.add("show");
+    sheet.classList.add("show");
+
+    sheetClose.focus();
+}
+
+function setupDirectionsButton(cafe) {
+    const directionsButton =
+        document.querySelector(
+            ".sheet-footer .pill.small"
+        );
+
+    if (!directionsButton) {
+        return;
+    }
+
+    directionsButton.onclick = () => {
+        const url =
+            `https://www.google.com/maps/dir/?api=1` +
+            `&origin=${userLatitude},${userLongitude}` +
+            `&destination=${cafe.latitude},${cafe.longitude}`;
+
+        window.open(
+            url,
+            "_blank",
+            "noopener,noreferrer"
+        );
+    };
+}
+
+function closeSheet() {
+    scrim.classList.remove("show");
+    sheet.classList.remove("show");
+
+    if (lastFocused) {
+        lastFocused.focus();
+    }
+
+    selectedCafe = null;
+}
+
+sheetClose.addEventListener(
+    "click",
+    closeSheet
+);
+
+scrim.addEventListener(
+    "click",
+    closeSheet
+);
+
+document.addEventListener(
+    "keydown",
+    (event) => {
+        if (
+            event.key === "Escape" &&
+            sheet.classList.contains("show")
+        ) {
+            closeSheet();
+        }
+    }
+);
+
+function showSearchError(message) {
+    console.error(message);
+
+    cafeList.innerHTML = `
+        <div class="empty-state">
+            <p>Search failed.</p>
+            <small>Check your connection and try again.</small>
+        </div>
+    `;
+
+    updateResultsHeader(0);
+}
+
+function escapeHTML(value) {
+    const div = document.createElement("div");
+
+    div.textContent = String(value ?? "");
+
+    return div.innerHTML;
 }
