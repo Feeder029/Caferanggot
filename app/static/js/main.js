@@ -100,7 +100,7 @@ function getUserLocation() {
 async function findNearbyCafes() {
     try {
         const location = await getUserLocation();
-        const radius = 5000;
+        const radius = 3000;
 
         const response = await fetch("/api/cafes", {
             method: "POST",
@@ -825,7 +825,7 @@ function showSearchError(message) {
             <p>Search failed.</p>
             <small>
                 Check your internet connection or
-                location settings and try again.
+                location settings if turned on and try again.
             </small>
         </div>
     `;

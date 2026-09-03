@@ -34,24 +34,33 @@ export default async function handler(request) {
             );
         }
 
+        // const query = `
+        //     [out:json][timeout:15];
+
+        //     (
+        //         nwr["amenity"="cafe"]
+        //             (around:${radius},${latitude},${longitude});
+
+        //         nwr["shop"="coffee"]
+        //             (around:${radius},${latitude},${longitude});
+
+        //         nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
+        //             ["amenity"]
+        //             (around:${radius},${latitude},${longitude});
+
+        //         nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
+        //             ["shop"]
+        //             (around:${radius},${latitude},${longitude});
+        //     );
+
+        //     out center tags;
+        // `;
+
         const query = `
-            [out:json][timeout:25];
+            [out:json][timeout:15];
 
-            (
-                nwr["amenity"="cafe"]
-                    (around:${radius},${latitude},${longitude});
-
-                nwr["shop"="coffee"]
-                    (around:${radius},${latitude},${longitude});
-
-                nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
-                    ["amenity"]
-                    (around:${radius},${latitude},${longitude});
-
-                nwr["name"~"coffee|cafe|café|kape|kapehan|brew|espresso|kopi|kaffee",i]
-                    ["shop"]
-                    (around:${radius},${latitude},${longitude});
-            );
+            nwr["amenity"="cafe"]
+                (around:${radius},${latitude},${longitude});
 
             out center tags;
         `;
