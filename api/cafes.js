@@ -1,159 +1,54 @@
 export default async function handler(request) {
-    if (request.method !== "POST") {
-        return new Response(
-            JSON.stringify({
-                error: "Method not allowed"
-            }),
-            {
-                status: 405,
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-    }
-
     try {
+        // TEST 1
+        if (request.method !== "POST") {
+            return Response.json(
+                {
+                    step: "method",
+                    method: request.method,
+                    message: "Use POST"
+                },
+                { status: 405 }
+            );
+        }
+
+        // TEST 2
         const body = await request.json();
 
         const latitude = Number(body.latitude);
         const longitude = Number(body.longitude);
+        const radius = Number(body.radius) || 3000;
 
-        let radius = Number(body.radius);
-
-        if (!Number.isFinite(radius)) {
-            radius = 3000;
-        }
-
-        radius = Math.min(
-            Math.max(radius, 500),
-            5000
-        );
-
+        // TEST 3
         if (
             !Number.isFinite(latitude) ||
-            !Number.isFinite(longitude) ||
-            latitude < -90 ||
-            latitude > 90 ||
-            longitude < -180 ||
-            longitude > 180
+            !Number.isFinite(longitude)
         ) {
-            return new Response(
-                JSON.stringify({
-                    error: "Invalid location data"
-                }),
+            return Response.json(
                 {
-                    status: 400,
-                    headers: {
-                        "Content-Type": "application/json"
-                    }
-                }
+                    step: "coordinates",
+                    error: "Invalid coordinates"
+                },
+                { status: 400 }
             );
         }
 
-        const query = `
-            [out:json][timeout:10];
-
-            nwr["amenity"="cafe"]
-                (around:${radius},${latitude},${longitude});
-
-            out center tags;
-        `;
-
-        const controller = new AbortController();
-
-        const timeout = setTimeout(() => {
-            controller.abort();
-        }, 8000);
-
-        let overpassResponse;
-
-        try {
-            overpassResponse = await fetch(
-                "https://overpass.kumi.systems/api/interpreter",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/x-www-form-urlencoded",
-                        "User-Agent":
-                            "Caferanggot/1.0"
-                    },
-                    body: new URLSearchParams({
-                        data: query
-                    }),
-                    signal: controller.signal
-                }
-            );
-        } finally {
-            clearTimeout(timeout);
-        }
-
-        if (!overpassResponse.ok) {
-            const errorText =
-                await overpassResponse.text();
-
-            return new Response(
-                JSON.stringify({
-                    error: "Overpass API error",
-                    status: overpassResponse.status,
-                    details: errorText
-                }),
-                {
-                    status: 502,
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    }
-                }
-            );
-        }
-
-        const data =
-            await overpassResponse.json();
-
-        return new Response(
-            JSON.stringify(data),
-            {
-                status: 200,
-                headers: {
-                    "Content-Type":
-                        "application/json",
-                    "Cache-Control":
-                        "public, max-age=60"
-                }
-            }
-        );
+        // TEST 4 - DON'T CALL OVERPASS YET
+        return Response.json({
+            step: "before-overpass",
+            message: "Vercel API works",
+            latitude,
+            longitude,
+            radius
+        });
 
     } catch (error) {
-        if (error.name === "AbortError") {
-            return new Response(
-                JSON.stringify({
-                    error:
-                        "Cafe search timed out. Please try again."
-                }),
-                {
-                    status: 504,
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    }
-                }
-            );
-        }
-
-        return new Response(
-            JSON.stringify({
-                error: "Server error",
-                details: error.message
-            }),
+        return Response.json(
             {
-                status: 500,
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                }
-            }
+                step: "catch",
+                error: error.message
+            },
+            { status: 500 }
         );
     }
 }
