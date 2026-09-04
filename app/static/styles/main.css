@@ -128,9 +128,10 @@ body {
   .pill:active{ transform:scale(0.97); }
  
   .ghost-btn{
-    background:none; border:none;
+    background:none;
+    border:none;
     color:var(--cream-dim);
-    font-size:13px;
+    font-size:15px;
     text-decoration:underline;
     text-underline-offset:3px;
     cursor:pointer;
@@ -469,6 +470,7 @@ body {
   width: 100%;
   text-align: center;
   padding: 8px 0 4px;
+  margin-top: -6px;
   flex-shrink: 0;
 }
   @media (prefers-reduced-motion: reduce){
@@ -478,3 +480,9 @@ body {
     }
     .screen{ transition:opacity .2s linear; transform:none !important; }
   }
+
+@media (max-width: 699px) {
+  .results-footer {
+    margin-top: -10px;
+  }
+}
